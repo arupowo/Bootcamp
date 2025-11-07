@@ -40,6 +40,10 @@ env/
 *.sqlite
 *.sqlite3
 
+# Streamlit
+.streamlit_messages.json
+.streamlit_chats.json
+
 # Logs
 *.log
 

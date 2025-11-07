@@ -1,9 +1,8 @@
 """
 LangChain Tools for HackerNews Article Operations
 """
-from langchain.tools import StructuredTool, tool
+from langchain.tools import tool
 from typing import Optional
-from pydantic.v1 import BaseModel, Field
 from app.utils.api_client import (
     fetch_top_articles,
     fetch_trending_articles,
@@ -15,9 +14,7 @@ from app.utils.api_client import (
 )
 
 
-class FetchTopArticlesInput(BaseModel):
-    limit: int = Field(default=10, description="Number of articles to fetch")
-
+@tool
 def fetch_top_hn_articles(limit: int = 10) -> str:
     """Fetch top articles from HackerNews API and store them in the database.
     
@@ -37,9 +34,7 @@ def fetch_top_hn_articles(limit: int = 10) -> str:
         return f"Error: {str(e)}"
 
 
-class FetchTrendingArticlesInput(BaseModel):
-    limit: int = Field(default=10, description="Number of articles to fetch")
-
+@tool
 def fetch_trending_hn_articles(limit: int = 10) -> str:
     """Fetch trending articles from HackerNews API and store them in the database.
     
@@ -59,9 +54,7 @@ def fetch_trending_hn_articles(limit: int = 10) -> str:
         return f"Error: {str(e)}"
 
 
-class FetchNewArticlesInput(BaseModel):
-    limit: int = Field(default=10, description="Number of articles to fetch")
-
+@tool
 def fetch_new_hn_articles(limit: int = 10) -> str:
     """Fetch new articles from HackerNews API and store them in the database.
     
@@ -81,16 +74,7 @@ def fetch_new_hn_articles(limit: int = 10) -> str:
         return f"Error: {str(e)}"
 
 
-class SearchArticlesInput(BaseModel):
-    keyword: Optional[str] = Field(default=None, description="Search keyword to find in article titles")
-    author: Optional[str] = Field(default=None, description="Filter by author name")
-    min_score: Optional[int] = Field(default=None, description="Minimum score filter")
-    max_score: Optional[int] = Field(default=None, description="Maximum score filter")
-    tag: Optional[str] = Field(default=None, description="Filter by tag")
-    sort_by: str = Field(default='score', description="Sort field: score, created_at, comment_count")
-    order: str = Field(default='desc', description="Sort order: asc or desc")
-    limit: int = Field(default=10, description="Maximum number of articles to return")
-
+@tool
 def search_articles(
     keyword: Optional[str] = None,
     author: Optional[str] = None,
@@ -148,9 +132,7 @@ def search_articles(
         return f"Error searching articles: {str(e)}"
 
 
-class GetArticleDetailsInput(BaseModel):
-    article_id: int = Field(description="The database ID of the article")
-
+@tool
 def get_article_details(article_id: int) -> str:
     """Get detailed information about a specific article by its database ID.
     
@@ -181,9 +163,7 @@ def get_article_details(article_id: int) -> str:
         return f"Error getting article details: {str(e)}"
 
 
-class GetTrendingArticlesInput(BaseModel):
-    limit: int = Field(default=10, description="Number of articles to return")
-
+@tool
 def get_trending_articles_from_db(limit: int = 10) -> str:
     """Get trending articles from the database, sorted by score.
     
@@ -211,6 +191,7 @@ def get_trending_articles_from_db(limit: int = 10) -> str:
         return f"Error getting trending articles: {str(e)}"
 
 
+@tool
 def get_article_statistics() -> str:
     """Get statistics about articles in the database.
     
@@ -236,46 +217,12 @@ def get_article_statistics() -> str:
 def get_all_tools():
     """Return all available tools"""
     return [
-        StructuredTool.from_function(
-            func=fetch_top_hn_articles,
-            name="fetch_top_hn_articles",
-            description="Fetch top articles from HackerNews API and store them in the database",
-            args_schema=FetchTopArticlesInput
-        ),
-        StructuredTool.from_function(
-            func=fetch_trending_hn_articles,
-            name="fetch_trending_hn_articles",
-            description="Fetch trending articles from HackerNews API and store them in the database",
-            args_schema=FetchTrendingArticlesInput
-        ),
-        StructuredTool.from_function(
-            func=fetch_new_hn_articles,
-            name="fetch_new_hn_articles",
-            description="Fetch new articles from HackerNews API and store them in the database",
-            args_schema=FetchNewArticlesInput
-        ),
-        StructuredTool.from_function(
-            func=search_articles,
-            name="search_articles",
-            description="Search and retrieve articles from the database with various filters",
-            args_schema=SearchArticlesInput
-        ),
-        StructuredTool.from_function(
-            func=get_article_details,
-            name="get_article_details",
-            description="Get detailed information about a specific article by its database ID",
-            args_schema=GetArticleDetailsInput
-        ),
-        StructuredTool.from_function(
-            func=get_trending_articles_from_db,
-            name="get_trending_articles_from_db",
-            description="Get trending articles from the database, sorted by score",
-            args_schema=GetTrendingArticlesInput
-        ),
-        StructuredTool.from_function(
-            func=get_article_statistics,
-            name="get_article_statistics",
-            description="Get statistics about articles in the database"
-        )
+        fetch_top_hn_articles,
+        fetch_trending_hn_articles,
+        fetch_new_hn_articles,
+        search_articles,
+        get_article_details,
+        get_trending_articles_from_db,
+        get_article_statistics
     ]
 
