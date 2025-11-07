@@ -117,11 +117,15 @@ def search_articles(
             articles = result['data']
             summary = f"Found {len(articles)} articles:\n\n"
             for i, article in enumerate(articles, 1):
+                article_id = article.get('id', 'N/A')
                 summary += f"{i}. {article.get('title', 'N/A')}\n"
+                summary += f"   ID: {article_id}\n"
                 summary += f"   Author: {article.get('author', 'N/A')}\n"
                 summary += f"   Score: {article.get('score', 0)}\n"
                 summary += f"   Comments: {article.get('comment_count', 0)}\n"
-                summary += f"   URL: {article.get('url', 'N/A')}\n"
+                url = article.get('url', 'N/A')
+                if url and url != 'N/A':
+                    summary += f"   Article URL: {url}\n"
                 if article.get('tags'):
                     summary += f"   Tags: {article.get('tags')}\n"
                 summary += "\n"
@@ -152,7 +156,6 @@ def get_article_details(article_id: int) -> str:
             details += f"Score: {article.get('score', 0)}\n"
             details += f"Comments: {article.get('comment_count', 0)}\n"
             details += f"URL: {article.get('url', 'N/A')}\n"
-            details += f"HackerNews URL: {article.get('hn_url', 'N/A')}\n"
             if article.get('tags'):
                 details += f"Tags: {article.get('tags')}\n"
             details += f"Created: {article.get('created_at', 'N/A')}\n"
@@ -179,10 +182,15 @@ def get_trending_articles_from_db(limit: int = 10) -> str:
             articles = result['data']
             summary = f"Top {len(articles)} Trending Articles:\n\n"
             for i, article in enumerate(articles, 1):
+                article_id = article.get('id', 'N/A')
                 summary += f"{i}. {article.get('title', 'N/A')}\n"
+                summary += f"   ID: {article_id}\n"
                 summary += f"   Author: {article.get('author', 'N/A')}\n"
                 summary += f"   Score: {article.get('score', 0)}\n"
                 summary += f"   Comments: {article.get('comment_count', 0)}\n"
+                url = article.get('url', 'N/A')
+                if url and url != 'N/A':
+                    summary += f"   Article URL: {url}\n"
                 summary += "\n"
             return summary
         else:

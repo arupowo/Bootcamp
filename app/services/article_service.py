@@ -10,22 +10,38 @@ from app.services.hn_fetcher import (
     fetch_top_articles, fetch_trending_articles,
     fetch_new_articles, fetch_best_articles
 )
+from app.services.scraping_service import scrape_article_content
 
 
 class ArticleService:    
     def __init__(self, db: Database):
         self.db = db
     
-    def save_articles_to_db(self, articles: list) -> Tuple[int, int]:
-        """Save articles to database"""
+    def save_articles_to_db(self, articles: list) -> Tuple[int, int, List[str]]:
+        """
+        Save articles to database and scrape content.
+        Skips saving articles if content is None.
+        
+        Returns:
+            Tuple of (saved_count, updated_count, failed_urls_list)
+        """
         session = self.db.get_session()
         saved_count = 0
         updated_count = 0
+        failed_urls = []
         
         try:
             for article_data in articles:
                 # Check if article already exists
                 existing = session.query(Article).filter_by(hn_id=article_data['hn_id']).first()
+                
+                # Scrape content if URL is available and content doesn't exist
+                scraped_content = None
+                url = article_data.get('url')
+                if url and url.strip():
+                    # Only scrape if content doesn't exist or is empty
+                    if not existing or not existing.content:
+                        scraped_content = scrape_article_content(url)
                 
                 if existing:
                     # Update existing article
@@ -34,45 +50,52 @@ class ArticleService:
                     existing.score = article_data['score']
                     existing.comment_count = article_data['comment_count']
                     existing.tags = article_data.get('tags')
-                    existing.fetched_at = datetime.utcnow()
                     if article_data.get('created_at'):
                         existing.created_at = article_data['created_at']
+                    # Update content only if we successfully scraped it
+                    if scraped_content:
+                        existing.content = scraped_content
                     updated_count += 1
                 else:
-                    # Create new article
-                    article = Article(
-                        hn_id=article_data['hn_id'],
-                        title=article_data['title'],
-                        url=article_data['url'],
-                        hn_url=article_data['hn_url'],
-                        author=article_data['author'],
-                        score=article_data['score'],
-                        comment_count=article_data['comment_count'],
-                        created_at=article_data.get('created_at'),
-                        tags=article_data.get('tags')
-                    )
-                    session.add(article)
-                    saved_count += 1
+                    # Only create new article if content was successfully scraped
+                    if scraped_content is not None:
+                        article = Article(
+                            hn_id=article_data['hn_id'],
+                            title=article_data['title'],
+                            url=article_data['url'],
+                            author=article_data['author'],
+                            score=article_data['score'],
+                            comment_count=article_data['comment_count'],
+                            created_at=article_data.get('created_at'),
+                            tags=article_data.get('tags'),
+                            content=scraped_content
+                        )
+                        session.add(article)
+                        saved_count += 1
+                    else:
+                        # Track failed URLs for new articles that weren't saved (only if URL exists)
+                        if url and url.strip():
+                            failed_urls.append(url)
             
             session.commit()
-            return saved_count, updated_count
+            return saved_count, updated_count, failed_urls
         except Exception as e:
             session.rollback()
             raise e
         finally:
             session.close()
     
-    def fetch_and_save_top_articles(self, limit: int = 10) -> Tuple[int, int]:
+    def fetch_and_save_top_articles(self, limit: int = 10) -> Tuple[int, int, List[str]]:
         """Fetch top articles and save to database"""
         articles = fetch_top_articles(limit)
         return self.save_articles_to_db(articles)
     
-    def fetch_and_save_trending_articles(self, limit: int = 10) -> Tuple[int, int]:
+    def fetch_and_save_trending_articles(self, limit: int = 10) -> Tuple[int, int, List[str]]:
         """Fetch trending articles and save to database"""
         articles = fetch_trending_articles(limit)
         return self.save_articles_to_db(articles)
     
-    def fetch_and_save_new_articles(self, limit: int = 10) -> Tuple[int, int]:
+    def fetch_and_save_new_articles(self, limit: int = 10) -> Tuple[int, int, List[str]]:
         """Fetch new articles and save to database"""
         articles = fetch_new_articles(limit)
         return self.save_articles_to_db(articles)

@@ -29,12 +29,14 @@ def fetch_top():
     limit = request.json.get('limit', 10) if request.json else 10
     
     try:
-        saved_count, updated_count = article_service_instance.fetch_and_save_top_articles(limit)
+        saved_count, updated_count, failed_urls = article_service_instance.fetch_and_save_top_articles(limit)
         return jsonify({
             'success': True,
             'saved': saved_count,
             'updated': updated_count,
-            'message': f'Successfully fetched articles (saved: {saved_count}, updated: {updated_count})'
+            'failed_urls': failed_urls,
+            'failed_count': len(failed_urls),
+            'message': f'Successfully fetched articles (saved: {saved_count}, updated: {updated_count}, failed: {len(failed_urls)})'
         }), 200
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -46,12 +48,14 @@ def fetch_trending():
     limit = request.json.get('limit', 10) if request.json else 10
     
     try:
-        saved_count, updated_count = article_service_instance.fetch_and_save_trending_articles(limit)
+        saved_count, updated_count, failed_urls = article_service_instance.fetch_and_save_trending_articles(limit)
         return jsonify({
             'success': True,
             'saved': saved_count,
             'updated': updated_count,
-            'message': f'Successfully fetched trending articles (saved: {saved_count}, updated: {updated_count})'
+            'failed_urls': failed_urls,
+            'failed_count': len(failed_urls),
+            'message': f'Successfully fetched trending articles (saved: {saved_count}, updated: {updated_count}, failed: {len(failed_urls)})'
         }), 200
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -63,12 +67,14 @@ def fetch_new():
     limit = request.json.get('limit', 10) if request.json else 10
     
     try:
-        saved_count, updated_count = article_service_instance.fetch_and_save_new_articles(limit)
+        saved_count, updated_count, failed_urls = article_service_instance.fetch_and_save_new_articles(limit)
         return jsonify({
             'success': True,
             'saved': saved_count,
             'updated': updated_count,
-            'message': f'Successfully fetched new articles (saved: {saved_count}, updated: {updated_count})'
+            'failed_urls': failed_urls,
+            'failed_count': len(failed_urls),
+            'message': f'Successfully fetched new articles (saved: {saved_count}, updated: {updated_count}, failed: {len(failed_urls)})'
         }), 200
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

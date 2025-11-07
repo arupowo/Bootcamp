@@ -3,6 +3,7 @@ Streamlit Chat UI for HackerNews Article Assistant
 """
 import streamlit as st
 import os
+import re
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import create_agent
@@ -60,12 +61,59 @@ def initialize_agent():
         You have access to tools that can fetch articles from HackerNews API, search the database, 
         get article details, view trending articles, and get statistics.
         
-        When summarizing articles, provide clear and concise information. 
+        IMPORTANT: When users ask for article links or URLs, you MUST use the search_articles or 
+        get_trending_articles_from_db tools first to find articles, then use get_article_details 
+        with the article ID to retrieve the full URL. Always include URLs in your responses when 
+        discussing articles.
+        
+        When summarizing articles, provide clear and concise information including URLs. 
         When searching, use appropriate filters to find relevant articles.
         Remember previous conversation context and refer back to it when relevant."""
     )
     
     return agent
+
+
+def extract_urls(text):
+    """Extract URLs from text - improved pattern"""
+    if not text:
+        return []
+    
+    urls = []
+    
+    # Pattern 1: Standard URLs (http:// or https://)
+    url_pattern1 = r'https?://[^\s<>"{}|\\^`\[\]()]+[^\s<>"{}|\\^`\[\]().,;:!?]'
+    urls.extend(re.findall(url_pattern1, text))
+    
+    # Pattern 2: URLs in parentheses
+    url_pattern2 = r'\(https?://[^\)]+\)'
+    matches2 = re.findall(url_pattern2, text)
+    for match in matches2:
+        clean_url = re.search(r'https?://[^\)]+', match)
+        if clean_url:
+            urls.append(clean_url.group())
+    
+    # Pattern 3: URLs in brackets
+    url_pattern3 = r'\[https?://[^\]]+\]'
+    matches3 = re.findall(url_pattern3, text)
+    for match in matches3:
+        clean_url = re.search(r'https?://[^\]]+', match)
+        if clean_url:
+            urls.append(clean_url.group())
+    
+    # Pattern 4: URLs at end of line or followed by punctuation
+    url_pattern4 = r'https?://[^\s]+'
+    urls.extend(re.findall(url_pattern4, text))
+    
+    # Clean and deduplicate
+    cleaned_urls = []
+    for url in urls:
+        # Remove trailing punctuation that might have been captured
+        url = url.rstrip('.,;:!?)')
+        if url.startswith('http://') or url.startswith('https://'):
+            cleaned_urls.append(url)
+    
+    return list(set(cleaned_urls))  # Remove duplicates
 
 
 def get_agent_response(agent, conversation_history, user_prompt):
@@ -84,12 +132,31 @@ def get_agent_response(agent, conversation_history, user_prompt):
     # Invoke agent with messages
     result = agent.invoke({"messages": langchain_messages})
     
-    # Extract response text from agent result
+    # Extract response text from agent result - handle nested structures
+    response_text = ""
     if isinstance(result, dict):
         messages_list = result.get("messages", [])
         if messages_list:
             last_message = messages_list[-1]
-            response_text = last_message.content if hasattr(last_message, 'content') else str(last_message)
+            # Handle different message types
+            if hasattr(last_message, 'content'):
+                content = last_message.content
+                # Handle nested dict structure
+                if isinstance(content, dict):
+                    response_text = content.get('text', str(content))
+                elif isinstance(content, list):
+                    # Handle list of content blocks
+                    text_parts = []
+                    for block in content:
+                        if isinstance(block, dict):
+                            text_parts.append(block.get('text', str(block)))
+                        else:
+                            text_parts.append(str(block))
+                    response_text = '\n'.join(text_parts)
+                else:
+                    response_text = str(content)
+            else:
+                response_text = str(last_message)
         else:
             response_text = result.get("output", str(result))
     else:
@@ -196,6 +263,40 @@ for message in messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# Display embedded URLs from the last assistant message (just above chat input)
+if messages:
+    last_message = messages[-1]
+    if last_message.get("role") == "assistant":
+        urls = extract_urls(last_message.get("content", ""))
+        if urls:
+            st.markdown("---")
+            st.markdown("### 🔗 Embedded Links")
+            for url in urls:
+                try:
+                    # Create a nice embedded iframe with modern UI
+                    st.markdown(f"""
+                    <div style="margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px 15px; border-bottom: 1px solid #e0e0e0;">
+                            <a href="{url}" target="_blank" style="text-decoration: none; color: white; font-weight: 600; font-size: 14px;">
+                                🔗 Open in new tab: {url[:60]}{'...' if len(url) > 60 else ''}
+                            </a>
+                        </div>
+                        <iframe 
+                            src="{url}" 
+                            width="100%" 
+                            height="450" 
+                            frameborder="0" 
+                            style="border-radius: 0 0 8px 8px; display: block;"
+                            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
+                            loading="lazy"
+                            onerror="this.style.display='none';">
+                        </iframe>
+                    </div>
+                    """, unsafe_allow_html=True)
+                except Exception as e:
+                    # Fallback to simple link if embedding fails
+                    st.markdown(f"🔗 [Open Link: {url}]({url})")
+
 # Chat input
 try:
     prompt = st.chat_input("Ask me about HackerNews articles...")
@@ -253,6 +354,37 @@ if prompt:
                 response_text = get_agent_response(agent, conversation_history, prompt)
                 
                 st.markdown(response_text)
+                
+                # Extract and display URLs immediately after response
+                urls = extract_urls(response_text)
+                if urls:
+                    st.markdown("---")
+                    st.markdown("### 🔗 Embedded Links")
+                    for url in urls:
+                        try:
+                            # Create a nice embedded iframe with modern UI
+                            st.markdown(f"""
+                            <div style="margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px 15px; border-bottom: 1px solid #e0e0e0;">
+                                    <a href="{url}" target="_blank" style="text-decoration: none; color: white; font-weight: 600; font-size: 14px;">
+                                        🔗 Open in new tab: {url[:60]}{'...' if len(url) > 60 else ''}
+                                    </a>
+                                </div>
+                                <iframe 
+                                    src="{url}" 
+                                    width="100%" 
+                                    height="450" 
+                                    frameborder="0" 
+                                    style="border-radius: 0 0 8px 8px; display: block;"
+                                    sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
+                                    loading="lazy"
+                                    onerror="this.style.display='none';">
+                                </iframe>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        except Exception as e:
+                            # Fallback to simple link if embedding fails
+                            st.markdown(f"🔗 [Open Link: {url}]({url})")
                 
                 # Add assistant response to chat history
                 messages.append({"role": "assistant", "content": response_text})

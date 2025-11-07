@@ -84,7 +84,6 @@ def fetch_articles(story_ids: List[int], story_type: str = 'top') -> List[Dict]:
                 'hn_id': story.get('id'),
                 'title': title,
                 'url': url,
-                'hn_url': f"https://news.ycombinator.com/item?id={story_id}",
                 'author': story.get('by', 'Unknown'),
                 'score': story.get('score', 0),
                 'comment_count': story.get('descendants', 0),
