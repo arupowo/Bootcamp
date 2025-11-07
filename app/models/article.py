@@ -15,6 +15,7 @@ class Article(Base):
     created_at = Column(DateTime, default=None, index=True)
     tags = Column(Text, nullable=True)  # JSON string of tags/keywords
     content = Column(Text, nullable=True)  # Scraped article content
+    summary = Column(Text, nullable=True)  # AI-generated summary for RAG metadata search
     
     # Indexes for common queries
     __table_args__ = (
@@ -34,6 +35,7 @@ class Article(Base):
             'comment_count': self.comment_count,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'tags': self.tags,
-            'content': self.content
+            'content': self.content,
+            'summary': self.summary
         }
 
