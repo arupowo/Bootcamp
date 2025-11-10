@@ -7,6 +7,7 @@ import os
 from typing import List, Optional
 import logging
 from dotenv import load_dotenv
+import numpy as np
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -25,12 +26,13 @@ except Exception as e:
 def generate_embeddings(texts: List[str]) -> List[Optional[List[float]]]:
     """
     Generate embeddings for multiple texts using Gemini (batch operation).
+    Normalizes embeddings for accurate semantic similarity.
     
     Args:
         texts: List of text strings to embed
         
     Returns:
-        List of embedding vectors (1536 dimensions each) or None for failures
+        List of normalized embedding vectors (1536 dimensions each) or None for failures
     """
     if not client or not texts:
         logger.error("Gemini client not initialized or no texts provided")
@@ -43,10 +45,18 @@ def generate_embeddings(texts: List[str]) -> List[Optional[List[float]]]:
             config=types.EmbedContentConfig(output_dimensionality=1536)
         )
         
-        # Extract embedding vectors (1536 dimensions)
+        # Extract and normalize embedding vectors (1536 dimensions)
         embeddings = []
         for emb in result.embeddings:
-            embeddings.append(emb.values)
+            # Normalize the embedding for better semantic similarity
+            embedding_values_np = np.array(emb.values)
+            norm = np.linalg.norm(embedding_values_np)
+            if norm > 0:
+                normed_embedding = embedding_values_np / norm
+                embeddings.append(normed_embedding.tolist())
+            else:
+                logger.warning("Zero vector encountered, skipping normalization")
+                embeddings.append(emb.values)
         
         return embeddings
         

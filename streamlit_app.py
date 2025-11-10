@@ -6,8 +6,9 @@ import os
 import re
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.agents import create_agent
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from app.utils.tools import get_all_tools
 
 load_dotenv()
@@ -53,11 +54,9 @@ def initialize_agent():
     
     tools = get_all_tools()
     
-    # Create agent with tools
-    agent = create_agent(
-        llm,
-        tools=tools,
-        system_prompt="""You are a helpful assistant for browsing and summarizing HackerNews articles. 
+    # Create prompt template for the agent
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", """You are a helpful assistant for browsing and summarizing HackerNews articles. 
         You have access to tools that can fetch articles from HackerNews API, search the database, 
         get article details, view trending articles, and get statistics.
         
@@ -68,72 +67,63 @@ def initialize_agent():
         
         When summarizing articles, provide clear and concise information including URLs. 
         When searching, use appropriate filters to find relevant articles.
-        Remember previous conversation context and refer back to it when relevant."""
+        Remember previous conversation context and refer back to it when relevant."""),
+        ("placeholder", "{chat_history}"),
+        ("human", "{input}"),
+        ("placeholder", "{agent_scratchpad}"),
+    ])
+    
+    # Create the agent
+    agent = create_tool_calling_agent(llm, tools, prompt)
+    
+    # Create agent executor
+    agent_executor = AgentExecutor(
+        agent=agent,
+        tools=tools,
+        verbose=True,
+        handle_parsing_errors=True,
+        max_iterations=10
     )
     
-    return agent
+    return agent_executor
 
 
 def extract_urls(text):
-    """Extract URLs from text - improved pattern"""
-    # More comprehensive URL pattern
-    url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+[^\s<>"{}|\\^`\[\].,;:!?]'
+    """Extract URLs from text - simplified and more reliable pattern"""
+    # Simpler pattern that catches most URLs including those with slashes
+    url_pattern = r'https?://[^\s<>"\'\)\]]+(?:/[^\s<>"\'\)\]]*)?'
     urls = re.findall(url_pattern, text)
-    # Also check for URLs in parentheses or brackets
-    url_pattern2 = r'\(https?://[^\)]+\)|\[https?://[^\]]+\]'
-    urls2 = re.findall(url_pattern2, text)
-    for url_match in urls2:
-        # Extract URL from parentheses/brackets
-        clean_url = re.search(r'https?://[^\)\]]+', url_match)
-        if clean_url:
-            urls.append(clean_url.group())
-    return list(set(urls))  # Remove duplicates
+    
+    # Clean up URLs - remove trailing punctuation
+    cleaned_urls = []
+    for url in urls:
+        # Remove trailing punctuation
+        url = url.rstrip('.,;:!?')
+        if url:
+            cleaned_urls.append(url)
+    
+    return list(set(cleaned_urls))  # Remove duplicates
 
 
-def get_agent_response(agent, conversation_history, user_prompt):
-    # Build message history for the agent
-    langchain_messages = []
-    # Add conversation history
+def get_agent_response(agent_executor, conversation_history, user_prompt):
+    """Get response from the agent executor"""
+    # Build chat history in the format expected by the agent
+    chat_history = []
     for msg in conversation_history:
         if msg["role"] == "user":
-            langchain_messages.append(HumanMessage(content=msg["content"]))
+            chat_history.append(HumanMessage(content=msg["content"]))
         elif msg["role"] == "assistant":
-            langchain_messages.append(AIMessage(content=msg["content"]))
+            chat_history.append(AIMessage(content=msg["content"]))
     
-    # Add current user message
-    langchain_messages.append(HumanMessage(content=user_prompt))
+    # Invoke agent executor with the new format
+    result = agent_executor.invoke({
+        "input": user_prompt,
+        "chat_history": chat_history
+    })
     
-    # Invoke agent with messages
-    result = agent.invoke({"messages": langchain_messages})
-    
-    # Extract response text from agent result - handle nested structures
-    response_text = ""
-    if isinstance(result, dict):
-        messages_list = result.get("messages", [])
-        if messages_list:
-            last_message = messages_list[-1]
-            # Handle different message types
-            if hasattr(last_message, 'content'):
-                content = last_message.content
-                # Handle nested dict structure
-                if isinstance(content, dict):
-                    response_text = content.get('text', str(content))
-                elif isinstance(content, list):
-                    # Handle list of content blocks
-                    text_parts = []
-                    for block in content:
-                        if isinstance(block, dict):
-                            text_parts.append(block.get('text', str(block)))
-                        else:
-                            text_parts.append(str(block))
-                    response_text = '\n'.join(text_parts)
-                else:
-                    response_text = str(content)
-            else:
-                response_text = str(last_message)
-        else:
-            response_text = result.get("output", str(result))
-    else:
+    # Extract response text from result
+    response_text = result.get("output", "")
+    if not response_text:
         response_text = str(result)
     
     return response_text
@@ -236,40 +226,36 @@ except (AttributeError, KeyError):
 for message in messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-
-# Display embedded URLs from the last assistant message (just above chat input)
-if messages:
-    last_message = messages[-1]
-    if last_message.get("role") == "assistant":
-        urls = extract_urls(last_message.get("content", ""))
-        if urls:
-            st.markdown("---")
-            st.markdown("### 🔗 Embedded Links")
-            for url in urls:
-                try:
-                    # Create a nice embedded iframe with modern UI
-                    st.markdown(f"""
-                    <div style="margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px 15px; border-bottom: 1px solid #e0e0e0;">
-                            <a href="{url}" target="_blank" style="text-decoration: none; color: white; font-weight: 600; font-size: 14px;">
-                                🔗 Open in new tab: {url[:60]}{'...' if len(url) > 60 else ''}
-                            </a>
+        
+        # If this is an assistant message with URLs, show embeds
+        if message["role"] == "assistant":
+            urls = extract_urls(message["content"])
+            if urls:
+                st.markdown("---")
+                st.markdown("### 🔗 Embedded Links")
+                for idx, url in enumerate(urls, 1):
+                    try:
+                        st.markdown(f"""
+                        <div style="margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px 15px; border-bottom: 1px solid #e0e0e0;">
+                                <a href="{url}" target="_blank" style="text-decoration: none; color: white; font-weight: 600; font-size: 14px;">
+                                    🔗 Article {idx}: Open in new tab
+                                </a>
+                            </div>
+                            <iframe 
+                                src="{url}" 
+                                width="100%" 
+                                height="500" 
+                                frameborder="0" 
+                                style="border-radius: 0 0 8px 8px; display: block;"
+                                sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
+                                loading="lazy">
+                            </iframe>
                         </div>
-                        <iframe 
-                            src="{url}" 
-                            width="100%" 
-                            height="450" 
-                            frameborder="0" 
-                            style="border-radius: 0 0 8px 8px; display: block;"
-                            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
-                            loading="lazy"
-                            onerror="this.style.display='none';">
-                        </iframe>
-                    </div>
-                    """, unsafe_allow_html=True)
-                except Exception as e:
-                    # Fallback to simple link if embedding fails
-                    st.markdown(f"🔗 [Open Link: {url}]({url})")
+                        """, unsafe_allow_html=True)
+                        st.caption(f"📄 {url}")
+                    except Exception:
+                        st.markdown(f"🔗 [Open Link: {url}]({url})")
 
 # Chat input
 try:
@@ -328,6 +314,39 @@ if prompt:
                 response_text = get_agent_response(agent, conversation_history, prompt)
                 
                 st.markdown(response_text)
+                
+                # Extract and display embedded URLs immediately after response
+                urls = extract_urls(response_text)
+                if urls:
+                    st.markdown("---")
+                    st.markdown("### 🔗 Embedded Links")
+                    st.info(f"Found {len(urls)} article link(s)")
+                    
+                    for idx, url in enumerate(urls, 1):
+                        try:
+                            # Create a nice embedded iframe with modern UI
+                            st.markdown(f"""
+                            <div style="margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px 15px; border-bottom: 1px solid #e0e0e0;">
+                                    <a href="{url}" target="_blank" style="text-decoration: none; color: white; font-weight: 600; font-size: 14px;">
+                                        🔗 Article {idx}: Open in new tab
+                                    </a>
+                                </div>
+                                <iframe 
+                                    src="{url}" 
+                                    width="100%" 
+                                    height="500" 
+                                    frameborder="0" 
+                                    style="border-radius: 0 0 8px 8px; display: block;"
+                                    sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
+                                    loading="lazy">
+                                </iframe>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            st.caption(f"📄 {url}")
+                        except Exception as e:
+                            # Fallback to simple link if embedding fails
+                            st.markdown(f"🔗 [Open Link: {url}]({url})")
                 
                 # Add assistant response to chat history
                 messages.append({"role": "assistant", "content": response_text})
