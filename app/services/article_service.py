@@ -3,7 +3,9 @@ Article Service - Business Logic Layer
 """
 from typing import Dict, List, Optional, Tuple
 from sqlalchemy import func
+import logging
 from app.models.article import Article
+from app.models.article_chunk import ArticleChunk
 from app.database.connection import Database
 from app.services.hn_fetcher import (
     fetch_top_articles, fetch_trending_articles,
@@ -11,6 +13,10 @@ from app.services.hn_fetcher import (
 )
 from app.services.scraping_service import scrape_article_content
 from app.services.summary_service import generate_summary_and_tags
+from app.services.chunking_services import chunk_article
+from app.services.embedding_service import generate_embeddings
+
+logger = logging.getLogger(__name__)
 
 
 class ArticleService:    
@@ -18,14 +24,6 @@ class ArticleService:
         self.db = db
     
     def save_articles_to_db(self, articles: list) -> Tuple[int, int, List[str]]:
-        """
-        Save articles to database and scrape content.
-        Skips saving articles if content is None.
-        Optimized to batch query existing articles to avoid N+1 query problem.
-        
-        Returns:
-            Tuple of (saved_count, updated_count, failed_urls_list)
-        """
         if not articles:
             return 0, 0, []
         
@@ -90,6 +88,47 @@ class ArticleService:
                             summary=generated_summary
                         )
                         session.add(article)
+                        session.flush()  # Get the article ID before chunking
+                        
+                        # ========================================
+                        # CHUNK AND EMBED IMMEDIATELY
+                        # ========================================
+                        try:
+                            # Create chunks with full metadata
+                            chunks = chunk_article(
+                                title=article.title,
+                                summary=article.summary or "",
+                                content=article.content or "",
+                                author=article.author,
+                                score=article.score,
+                                comment_count=article.comment_count,
+                                tags=article.tags,
+                                created_at=article.created_at.isoformat() if article.created_at else None,
+                                url=article.url
+                            )
+                            
+                            if chunks:
+                                # Generate embeddings in batch
+                                chunk_texts = [c['chunk_text'] for c in chunks]
+                                embeddings = generate_embeddings(chunk_texts)
+                                
+                                # Save chunks to database
+                                for chunk_data, embedding in zip(chunks, embeddings):
+                                    chunk = ArticleChunk(
+                                        article_id=article.hn_id,
+                                        chunk_text=chunk_data['chunk_text'],
+                                        chunk_type=chunk_data['chunk_type'],
+                                        chunk_index=chunk_data['chunk_index'],
+                                        token_count=chunk_data['token_count'],
+                                        embedding=embedding
+                                    )
+                                    session.add(chunk)
+                                
+                                logger.info(f"Created {len(chunks)} chunks for article {article.hn_id}")
+                        except Exception as e:
+                            logger.warning(f"Failed to chunk article {article.hn_id}: {e}")
+                            # Don't fail the entire operation if chunking fails
+                        
                         saved_count += 1
                     else:
                         # Track failed URLs for new articles that weren't saved (only if URL exists)

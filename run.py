@@ -9,4 +9,3 @@ if __name__ == '__main__':
     print(f"Using database: {app.config['DATABASE_URL'].split('@')[1] if '@' in app.config['DATABASE_URL'] else 'postgresql'}")
     
     app.run(debug=True, host='0.0.0.0', port=app.config['PORT'])
-

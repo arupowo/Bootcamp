@@ -1,6 +1,3 @@
-"""
-Summary Generation Service - Generate article summaries and tags using Groq
-"""
 from groq import Groq
 from typing import Optional
 import logging
