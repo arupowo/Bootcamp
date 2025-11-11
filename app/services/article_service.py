@@ -1,6 +1,4 @@
-"""
-Article Service - Business Logic Layer
-"""
+# Article Service - Business Logic Layer
 from typing import Dict, List, Optional, Tuple
 from sqlalchemy import func
 import logging
@@ -144,17 +142,17 @@ class ArticleService:
             session.close()
     
     def fetch_and_save_top_articles(self, limit: int = 10) -> Tuple[int, int, List[str]]:
-        """Fetch top articles and save to database"""
+        # Fetch top articles and save to database
         articles = fetch_top_articles(limit)
         return self.save_articles_to_db(articles)
     
     def fetch_and_save_trending_articles(self, limit: int = 10) -> Tuple[int, int, List[str]]:
-        """Fetch trending articles and save to database"""
+        # Fetch trending articles and save to database
         articles = fetch_trending_articles(limit)
         return self.save_articles_to_db(articles)
     
     def fetch_and_save_new_articles(self, limit: int = 10) -> Tuple[int, int, List[str]]:
-        """Fetch new articles and save to database"""
+        # Fetch new articles and save to database
         articles = fetch_new_articles(limit)
         return self.save_articles_to_db(articles)
     
@@ -223,7 +221,7 @@ class ArticleService:
             session.close()
     
     def get_article_by_id(self, article_id: int) -> Optional[Article]:
-        """Get a specific article by ID"""
+        # Get a specific article by ID
         session = self.db.get_session()
         
         try:
@@ -233,7 +231,7 @@ class ArticleService:
             session.close()
     
     def get_trending_articles(self, limit: int = 10) -> List[Article]:
-        """Get top trending articles from database"""
+        # Get top trending articles from database
         session = self.db.get_session()
         
         try:
@@ -246,7 +244,7 @@ class ArticleService:
             session.close()
     
     def get_stats(self) -> Dict:
-        """Get statistics about articles"""
+        # Get statistics about articles
         session = self.db.get_session()
         
         try:

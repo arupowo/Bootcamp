@@ -1,6 +1,4 @@
-"""
-Streamlit Chat UI for HackerNews Article Assistant
-"""
+# Streamlit Chat UI for HackerNews Article Assistant
 import streamlit as st
 import os
 import re
@@ -39,7 +37,7 @@ except (AttributeError, KeyError):
 
 
 def initialize_agent():
-    """Initialize the LangChain agent with tools"""
+    # Initialize the LangChain agent with tools
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         st.error("⚠️ Please set GOOGLE_API_KEY in your .env file")
@@ -89,7 +87,7 @@ def initialize_agent():
 
 
 def extract_urls(text):
-    """Extract URLs from text - simplified and more reliable pattern"""
+    # Extract URLs from text - simplified and more reliable pattern
     # Simpler pattern that catches most URLs including those with slashes
     url_pattern = r'https?://[^\s<>"\'\)\]]+(?:/[^\s<>"\'\)\]]*)?'
     urls = re.findall(url_pattern, text)
@@ -106,7 +104,7 @@ def extract_urls(text):
 
 
 def get_agent_response(agent_executor, conversation_history, user_prompt):
-    """Get response from the agent executor"""
+    # Get response from the agent executor
     # Build chat history in the format expected by the agent
     chat_history = []
     for msg in conversation_history:

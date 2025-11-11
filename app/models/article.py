@@ -24,7 +24,7 @@ class Article(Base):
     )
     
     def to_dict(self):
-        """Convert article to dictionary"""
+        # Convert article to dictionary
         return {
             'id': self.id,
             'hn_id': self.hn_id,

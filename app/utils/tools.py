@@ -1,6 +1,4 @@
-"""
-LangChain Tools for HackerNews Article Operations
-"""
+# LangChain Tools for HackerNews Article Operations
 from langchain.tools import tool
 from typing import Optional
 from app.utils.api_client import (
@@ -16,14 +14,7 @@ from app.utils.api_client import (
 
 @tool
 def fetch_top_hn_articles(limit: int = 10) -> str:
-    """Fetch top articles from HackerNews API and store them in the database.
-    
-    Args:
-        limit: Number of articles to fetch (default: 10)
-    
-    Returns:
-        A string describing how many articles were saved and updated
-    """
+    # Fetch top articles from HackerNews API and store them in the database. Args: limit: Number of articles to fetch (default: 10). Returns: A string describing how many articles were saved and updated
     try:
         result = fetch_top_articles(limit)
         if result.get('success'):
@@ -36,14 +27,7 @@ def fetch_top_hn_articles(limit: int = 10) -> str:
 
 @tool
 def fetch_trending_hn_articles(limit: int = 10) -> str:
-    """Fetch trending articles from HackerNews API and store them in the database.
-    
-    Args:
-        limit: Number of articles to fetch (default: 10)
-    
-    Returns:
-        A string describing how many articles were saved and updated
-    """
+    # Fetch trending articles from HackerNews API and store them in the database. Args: limit: Number of articles to fetch (default: 10). Returns: A string describing how many articles were saved and updated
     try:
         result = fetch_trending_articles(limit)
         if result.get('success'):
@@ -56,14 +40,7 @@ def fetch_trending_hn_articles(limit: int = 10) -> str:
 
 @tool
 def fetch_new_hn_articles(limit: int = 10) -> str:
-    """Fetch new articles from HackerNews API and store them in the database.
-    
-    Args:
-        limit: Number of articles to fetch (default: 10)
-    
-    Returns:
-        A string describing how many articles were saved and updated
-    """
+    # Fetch new articles from HackerNews API and store them in the database. Args: limit: Number of articles to fetch (default: 10). Returns: A string describing how many articles were saved and updated
     try:
         result = fetch_new_articles(limit)
         if result.get('success'):
@@ -85,21 +62,7 @@ def search_articles(
     order: str = 'desc',
     limit: int = 10
 ) -> str:
-    """Search and retrieve articles from the database with various filters.
-    
-    Args:
-        keyword: Search keyword to find in article titles
-        author: Filter by author name
-        min_score: Minimum score filter
-        max_score: Maximum score filter
-        tag: Filter by tag
-        sort_by: Sort field (score, created_at, comment_count)
-        order: Sort order (asc, desc)
-        limit: Maximum number of articles to return (default: 10)
-    
-    Returns:
-        A formatted string with article summaries
-    """
+    # Search and retrieve articles from the database with various filters. Args: keyword, author, min_score, max_score, tag, sort_by, order, limit. Returns: A formatted string with article summaries
     try:
         result = get_articles(
             page=1,
@@ -138,14 +101,7 @@ def search_articles(
 
 @tool
 def get_article_details(article_id: int) -> str:
-    """Get detailed information about a specific article by its database ID.
-    
-    Args:
-        article_id: The database ID of the article
-    
-    Returns:
-        A formatted string with article details
-    """
+    # Get detailed information about a specific article by its database ID. Args: article_id: The database ID of the article. Returns: A formatted string with article details
     try:
         result = get_article_by_id(article_id)
         if result.get('success') and result.get('data'):
@@ -168,14 +124,7 @@ def get_article_details(article_id: int) -> str:
 
 @tool
 def get_trending_articles_from_db(limit: int = 10) -> str:
-    """Get trending articles from the database, sorted by score.
-    
-    Args:
-        limit: Number of articles to return (default: 10)
-    
-    Returns:
-        A formatted string with trending article summaries
-    """
+    # Get trending articles from the database, sorted by score. Args: limit: Number of articles to return (default: 10). Returns: A formatted string with trending article summaries
     try:
         result = get_trending_articles(limit)
         if result.get('success') and result.get('data'):
@@ -201,11 +150,7 @@ def get_trending_articles_from_db(limit: int = 10) -> str:
 
 @tool
 def get_article_statistics() -> str:
-    """Get statistics about articles in the database.
-    
-    Returns:
-        A formatted string with database statistics
-    """
+    # Get statistics about articles in the database. Returns: A formatted string with database statistics
     try:
         result = get_stats()
         if result.get('success') and result.get('stats'):
@@ -223,7 +168,7 @@ def get_article_statistics() -> str:
 
 
 def get_all_tools():
-    """Return all available tools"""
+    # Return all available tools
     return [
         fetch_top_hn_articles,
         fetch_trending_hn_articles,

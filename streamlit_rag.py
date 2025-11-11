@@ -1,13 +1,9 @@
-"""
-Streamlit Chat UI - Simple RAG Interface with LLM Only
-"""
+# Streamlit Chat UI - Simple RAG Interface with LLM Only
 import streamlit as st
 import os
-import re
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from header_search import search_headers
+from app.services.rag_service import RAGService
+from app.services.ui_helper import UIHelper
 
 load_dotenv()
 
@@ -18,132 +14,188 @@ st.set_page_config(
     layout="wide"
 )
 
+# Custom CSS for red-tinted modern UI
+st.markdown("""
+<style>
+    /* Main app background with subtle gradient */
+    .stApp {
+        background: linear-gradient(135deg, #1a0000 0%, #2d0a0a 100%);
+    }
+    
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #2d0a0a 0%, #1a0000 100%);
+        border-right: 2px solid #ff6b6b;
+    }
+    
+    /* Main content area */
+    .main .block-container {
+        padding-top: 2rem;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 15px;
+        border: 1px solid rgba(255, 107, 107, 0.2);
+    }
+    
+    /* Headers */
+    h1, h2, h3 {
+        color: #ff6b6b !important;
+        text-shadow: 0 0 10px rgba(255, 107, 107, 0.3);
+        font-weight: 700 !important;
+    }
+    
+    /* Chat messages */
+    [data-testid="stChatMessage"] {
+        background: rgba(255, 107, 107, 0.05) !important;
+        border: 1px solid rgba(255, 107, 107, 0.2) !important;
+        border-radius: 10px !important;
+        margin: 10px 0 !important;
+    }
+    
+    /* Buttons */
+    .stButton button {
+        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 0.5rem 1rem !important;
+        font-weight: 600 !important;
+        box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4) !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stButton button:hover {
+        background: linear-gradient(135deg, #ee5a6f 0%, #ff6b6b 100%) !important;
+        box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6) !important;
+        transform: translateY(-2px) !important;
+    }
+    
+    /* Expanders */
+    [data-testid="stExpander"] {
+        background: rgba(255, 107, 107, 0.08) !important;
+        border: 1px solid rgba(255, 107, 107, 0.3) !important;
+        border-radius: 8px !important;
+        margin: 8px 0 !important;
+    }
+    
+    /* Info boxes */
+    .stAlert {
+        background: rgba(255, 107, 107, 0.1) !important;
+        border-left: 4px solid #ff6b6b !important;
+        border-radius: 5px !important;
+    }
+    
+    /* Success boxes */
+    [data-testid="stSuccess"] {
+        background: rgba(255, 107, 107, 0.15) !important;
+        border-left: 4px solid #ff6b6b !important;
+    }
+    
+    /* Text input */
+    [data-testid="stChatInput"] {
+        background: rgba(255, 107, 107, 0.05) !important;
+        border: 2px solid rgba(255, 107, 107, 0.3) !important;
+        border-radius: 10px !important;
+    }
+    
+    /* Dividers */
+    hr {
+        border-color: rgba(255, 107, 107, 0.3) !important;
+    }
+    
+    /* Markdown text */
+    .stMarkdown {
+        color: #f0f0f0 !important;
+    }
+    
+    /* Code blocks */
+    code {
+        background: rgba(255, 107, 107, 0.1) !important;
+        color: #ff6b6b !important;
+        padding: 2px 6px !important;
+        border-radius: 4px !important;
+    }
+    
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.3);
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+        border-radius: 5px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: #ee5a6f;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Initialize session state
 try:
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    if "llm" not in st.session_state:
-        st.session_state.llm = None
+    if "rag_service" not in st.session_state:
+        st.session_state.rag_service = None
     if "initialized" not in st.session_state:
         st.session_state.initialized = False
+    if "current_retrieved_headers" not in st.session_state:
+        st.session_state.current_retrieved_headers = []
+    if "suggested_questions" not in st.session_state:
+        st.session_state.suggested_questions = []
 except (AttributeError, KeyError):
     # Running as Python script - use regular variables instead
     if not hasattr(st, '_local_state'):
         st._local_state = {
             'messages': [],
-            'llm': None,
-            'initialized': False
+            'rag_service': None,
+            'initialized': False,
+            'current_retrieved_headers': [],
+            'suggested_questions': []
         }
 
 
-def initialize_llm():
-    """Initialize the LLM"""
+def initialize_rag_service():
+    # Initialize the RAG Service
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         st.error("⚠️ Please set GOOGLE_API_KEY in your .env file")
         st.stop()
     
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
-        google_api_key=api_key,
-        temperature=0.7,
-        convert_system_message_to_human=True
-    )
-    
-    return llm
-
-
-def extract_urls(text):
-    """Extract URLs from text - simplified and more reliable pattern"""
-    # Simpler pattern that catches most URLs including those with slashes
-    url_pattern = r'https?://[^\s<>"\'\)\]]+(?:/[^\s<>"\'\)\]]*)?'
-    urls = re.findall(url_pattern, text)
-    
-    # Clean up URLs - remove trailing punctuation
-    cleaned_urls = []
-    for url in urls:
-        # Remove trailing punctuation
-        url = url.rstrip('.,;:!?')
-        if url:
-            cleaned_urls.append(url)
-    
-    return list(set(cleaned_urls))  # Remove duplicates
-
-
-def get_llm_response(llm, conversation_history, user_prompt):
-    """Get response from the LLM with RAG using header search"""
-    
-    # Step 1: Search for relevant headers (RAG - Retrieval step)
     try:
-        retrieved_headers = search_headers(user_prompt, top_k=2)
+        rag_service = RAGService(
+            api_key=api_key,
+            model="gemini-2.5-flash",
+            temperature=0.7
+        )
+        return rag_service
     except Exception as e:
-        st.warning(f"Could not retrieve headers: {e}")
-        retrieved_headers = []
-    
-    # Step 2: Build context from retrieved headers
-    context = ""
-    if retrieved_headers:
-        context = "\n\n**CONTEXT FROM KNOWLEDGE BASE:**\n\n"
-        for idx, result in enumerate(retrieved_headers, 1):
-            context += f"Article {idx}: {result['article_title']}\n"
-            context += f"Header: {result['header_text']}\n"
-            context += f"URL: {result['article_url']}\n"
-            context += f"Relevance Score: {result['similarity_score']:.3f}\n\n"
-    
-    # Step 3: Build message history with RAG context
-    system_prompt = """You are a helpful AI assistant with access to a knowledge base of HackerNews articles. 
-    
-When provided with context from the knowledge base, use it to answer questions accurately and cite the sources.
-If the context is relevant, reference the article titles and provide the URLs.
-If the context is not relevant to the question, you can answer based on your general knowledge."""
-    
-    messages = [SystemMessage(content=system_prompt)]
-    
-    # Add conversation history
-    for msg in conversation_history:
-        if msg["role"] == "user":
-            messages.append(HumanMessage(content=msg["content"]))
-        elif msg["role"] == "assistant":
-            messages.append(AIMessage(content=msg["content"]))
-    
-    # Add current user message with context
-    user_message_with_context = user_prompt
-    if context:
-        user_message_with_context = f"{context}\n\n**USER QUESTION:**\n{user_prompt}"
-    
-    messages.append(HumanMessage(content=user_message_with_context))
-    
-    # Step 4: Get response from LLM (RAG - Generation step)
-    response = llm.invoke(messages)
-    
-    return response.content, retrieved_headers
+        st.error(f"Failed to initialize RAG service: {e}")
+        st.stop()
 
 
 # Sidebar for configuration
 with st.sidebar:
-    st.title("⚙️ Configuration")
-    
-    if st.button("🔄 Reinitialize LLM"):
+    # Clear Chat button at the TOP
+    if st.button("🗑️ Clear Chat", use_container_width=True):
         try:
-            st.session_state.llm = None
+            st.session_state.rag_service = None
             st.session_state.messages = []
             st.session_state.initialized = False
+            st.session_state.current_retrieved_headers = []
+            st.session_state.suggested_questions = []
         except (AttributeError, KeyError):
             if hasattr(st, '_local_state'):
-                st._local_state['llm'] = None
+                st._local_state['rag_service'] = None
                 st._local_state['messages'] = []
                 st._local_state['initialized'] = False
-        try:
-            st.rerun()
-        except Exception:
-            pass
-    
-    if st.button("🗑️ Clear Conversation"):
-        try:
-            st.session_state.messages = []
-        except (AttributeError, KeyError):
-            if hasattr(st, '_local_state'):
-                st._local_state['messages'] = []
+                st._local_state['current_retrieved_headers'] = []
+                st._local_state['suggested_questions'] = []
         try:
             st.rerun()
         except Exception:
@@ -151,50 +203,74 @@ with st.sidebar:
     
     st.divider()
     
-    st.markdown("### 💡 Example Queries")
-    st.markdown("""
-    - "Tell me about machine learning articles"
-    - "What are the latest AI developments?"
-    - "Show me articles about web development"
-    - "What's new in blockchain technology?"
-    - "Find articles about Python programming"
-    """)
+    # Display retrieved context
+    st.markdown("### 📚 Retrieved Context (Top 4)")
     
-    st.divider()
+    try:
+        current_headers = st.session_state.current_retrieved_headers
+    except (AttributeError, KeyError):
+        current_headers = getattr(st, '_local_state', {}).get('current_retrieved_headers', [])
     
-    st.markdown("### 🧠 How RAG Works")
-    st.markdown("""
-    1. **Retrieval**: Searches knowledge base for relevant headers
-    2. **Augmentation**: Adds context to your query
-    3. **Generation**: LLM generates informed response
-    """)
+    if current_headers:
+        st.success(f"Showing {len(current_headers)}/4 relevant articles")
+        for idx, header in enumerate(current_headers, 1):
+            # Use article title as the expander name (truncate if too long)
+            display_title = UIHelper.truncate_text(header['article_title'], max_length=50)
+            
+            # Show expander with article title
+            with st.expander(f"📄 {display_title} ({header['similarity_score']:.3f})", expanded=False):
+                st.markdown(f"**Full Title:** {header['article_title']}")
+                st.markdown(f"**Header:** {header['header_text'][:100]}...")
+                
+                # Embed the URL
+                url = header['article_url']
+                if url:
+                    st.markdown(f"[🔗 Open Article]({url})")
+                    try:
+                        st.markdown(f"""
+                        <div style="margin-top: 10px; border: 2px solid rgba(255, 107, 107, 0.4); border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(255, 107, 107, 0.2);">
+                            <iframe 
+                                src="{url}" 
+                                width="100%" 
+                                height="300" 
+                                frameborder="0" 
+                                style="display: block;"
+                                sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                                loading="lazy">
+                            </iframe>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    except Exception:
+                        st.caption("⚠️ Could not embed preview")
+    else:
+        st.info("💭 No context retrieved yet.\n\nAsk a question to see relevant articles!")
 
 # Main content
 st.title("🤖 RAG Chat Assistant")
 st.markdown("Ask me about HackerNews articles! I use **Retrieval-Augmented Generation (RAG)** to find relevant articles and provide informed answers.")
 
-# Initialize LLM if not already done
+# Initialize RAG Service if not already done
 try:
-    llm_initialized = st.session_state.get('initialized', False)
-    current_llm = st.session_state.get('llm')
+    service_initialized = st.session_state.get('initialized', False)
+    current_rag_service = st.session_state.get('rag_service')
 except (AttributeError, KeyError):
-    llm_initialized = getattr(st, '_local_state', {}).get('initialized', False)
-    current_llm = getattr(st, '_local_state', {}).get('llm')
+    service_initialized = getattr(st, '_local_state', {}).get('initialized', False)
+    current_rag_service = getattr(st, '_local_state', {}).get('rag_service')
 
-if not llm_initialized or current_llm is None:
-    with st.spinner("Initializing AI..."):
+if not service_initialized or current_rag_service is None:
+    with st.spinner("Initializing RAG Service..."):
         try:
-            current_llm = initialize_llm()
+            current_rag_service = initialize_rag_service()
             try:
-                st.session_state.llm = current_llm
+                st.session_state.rag_service = current_rag_service
                 st.session_state.initialized = True
             except (AttributeError, KeyError):
                 if not hasattr(st, '_local_state'):
                     st._local_state = {}
-                st._local_state['llm'] = current_llm
+                st._local_state['rag_service'] = current_rag_service
                 st._local_state['initialized'] = True
         except Exception as e:
-            st.error(f"Failed to initialize LLM: {str(e)}")
+            st.error(f"Failed to initialize RAG Service: {str(e)}")
             st.stop()
 
 # Display chat history
@@ -209,16 +285,16 @@ for message in messages:
         
         # If this is an assistant message with URLs, show embeds
         if message["role"] == "assistant":
-            urls = extract_urls(message["content"])
+            urls = UIHelper.extract_urls(message["content"])
             if urls:
                 st.markdown("---")
                 st.markdown("### 🔗 Embedded Links")
                 for idx, url in enumerate(urls, 1):
                     try:
                         st.markdown(f"""
-                        <div style="margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 10px 15px; border-bottom: 1px solid #e0e0e0;">
-                                <a href="{url}" target="_blank" style="text-decoration: none; color: white; font-weight: 600; font-size: 14px;">
+                        <div style="margin-bottom: 15px; border: 2px solid rgba(255, 107, 107, 0.4); border-radius: 12px; overflow: hidden; box-shadow: 0 6px 20px rgba(255, 107, 107, 0.3);">
+                            <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%); padding: 12px 20px; border-bottom: 2px solid rgba(255, 107, 107, 0.5);">
+                                <a href="{url}" target="_blank" style="text-decoration: none; color: white; font-weight: 700; font-size: 15px; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">
                                     🔗 Article {idx}: Open in new tab
                                 </a>
                             </div>
@@ -227,7 +303,7 @@ for message in messages:
                                 width="100%" 
                                 height="500" 
                                 frameborder="0" 
-                                style="border-radius: 0 0 8px 8px; display: block;"
+                                style="border-radius: 0 0 12px 12px; display: block; background: rgba(0,0,0,0.2);"
                                 sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
                                 loading="lazy">
                             </iframe>
@@ -237,9 +313,41 @@ for message in messages:
                     except Exception:
                         st.markdown(f"🔗 [Open Link: {url}]({url})")
 
+# Display suggested questions above chat input
+try:
+    suggested_questions = st.session_state.suggested_questions
+except (AttributeError, KeyError):
+    suggested_questions = getattr(st, '_local_state', {}).get('suggested_questions', [])
+
+if suggested_questions:
+    st.markdown("### 💡 Suggested Questions")
+    cols = st.columns(3)
+    for idx, question in enumerate(suggested_questions):
+        with cols[idx]:
+            if st.button(question, key=f"suggested_{idx}", use_container_width=True):
+                # Set the prompt to the suggested question
+                try:
+                    st.session_state.selected_suggestion = question
+                except (AttributeError, KeyError):
+                    if not hasattr(st, '_local_state'):
+                        st._local_state = {}
+                    st._local_state['selected_suggestion'] = question
+                st.rerun()
+
 # Chat input
 try:
-    prompt = st.chat_input("Ask me about HackerNews articles...")
+    # Check if a suggestion was selected
+    selected_suggestion = None
+    try:
+        selected_suggestion = st.session_state.get('selected_suggestion')
+        if selected_suggestion:
+            st.session_state.selected_suggestion = None  # Clear it after use
+    except (AttributeError, KeyError):
+        selected_suggestion = getattr(st, '_local_state', {}).get('selected_suggestion')
+        if selected_suggestion and hasattr(st, '_local_state'):
+            st._local_state['selected_suggestion'] = None
+    
+    prompt = selected_suggestion if selected_suggestion else st.chat_input("Ask me about HackerNews articles...")
 except Exception:
     # Running as Python script - skip chat input
     prompt = None
@@ -269,49 +377,60 @@ if prompt:
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
             try:
-                # Get LLM (should already be initialized above)
+                # Get RAG Service (should already be initialized above)
                 try:
-                    llm = st.session_state.llm
+                    rag_service = st.session_state.rag_service
                 except (AttributeError, KeyError):
-                    llm = getattr(st, '_local_state', {}).get('llm')
+                    rag_service = getattr(st, '_local_state', {}).get('rag_service')
                 
-                # If LLM is still None, initialize it
-                if llm is None:
-                    llm = initialize_llm()
+                # If RAG service is still None, initialize it
+                if rag_service is None:
+                    rag_service = initialize_rag_service()
                     try:
-                        st.session_state.llm = llm
+                        st.session_state.rag_service = rag_service
                     except (AttributeError, KeyError):
                         if not hasattr(st, '_local_state'):
                             st._local_state = {}
-                        st._local_state['llm'] = llm
+                        st._local_state['rag_service'] = rag_service
                 
-                if llm is None:
-                    raise Exception("Failed to initialize LLM. Please check your GOOGLE_API_KEY.")
+                if rag_service is None:
+                    raise Exception("Failed to initialize RAG Service. Please check your GOOGLE_API_KEY.")
                 
-                # Get response using LLM with RAG
+                # Get response using RAG Service
                 # Note: messages already includes the current user prompt
                 conversation_history = messages[:-1]  # All messages except the last one (current prompt)
+                response_text, retrieved_headers = rag_service.process_query(prompt, conversation_history)
                 
-                # Show a status for retrieval
-                with st.status("🔍 Retrieving relevant context...", expanded=False) as status:
-                    response_text, retrieved_headers = get_llm_response(llm, conversation_history, prompt)
-                    
-                    # Display retrieved headers
-                    if retrieved_headers:
-                        st.success(f"Found {len(retrieved_headers)} relevant headers")
-                        for idx, header in enumerate(retrieved_headers, 1):
-                            st.write(f"**{idx}. {header['header_text']}**")
-                            st.caption(f"From: {header['article_title']} (Score: {header['similarity_score']:.3f})")
-                    else:
-                        st.info("No relevant context found in knowledge base")
-                    
-                    status.update(label="✅ Context retrieved!", state="complete")
+                # Update session state with retrieved headers for sidebar display
+                try:
+                    st.session_state.current_retrieved_headers = retrieved_headers
+                except (AttributeError, KeyError):
+                    if hasattr(st, '_local_state'):
+                        st._local_state['current_retrieved_headers'] = retrieved_headers
+                
+                # Generate suggested questions based on retrieved headers
+                suggested = UIHelper.generate_suggested_questions(retrieved_headers)
+                try:
+                    st.session_state.suggested_questions = suggested
+                except (AttributeError, KeyError):
+                    if hasattr(st, '_local_state'):
+                        st._local_state['suggested_questions'] = suggested
                 
                 # Display the LLM response
                 st.markdown(response_text)
                 
+                # Show retrieved context summary
+                if retrieved_headers:
+                    with st.expander("🔍 View Retrieved Context", expanded=False):
+                        st.success(f"Found {len(retrieved_headers)} relevant headers")
+                        for idx, header in enumerate(retrieved_headers, 1):
+                            st.write(f"**{idx}. {header['header_text'][:80]}...**")
+                            st.caption(f"From: {header['article_title']} (Score: {header['similarity_score']:.3f})")
+                else:
+                    st.info("No relevant context found in knowledge base")
+                
                 # Extract and display embedded URLs immediately after response
-                urls = extract_urls(response_text)
+                urls = UIHelper.extract_urls(response_text)
                 if urls:
                     st.markdown("---")
                     st.markdown("### 🔗 Embedded Links")
@@ -351,6 +470,9 @@ if prompt:
                     st.session_state.messages = messages
                 except (AttributeError, KeyError):
                     st._local_state['messages'] = messages
+                
+                # Trigger rerun to update sidebar immediately
+                st.rerun()
                 
             except Exception as e:
                 error_msg = f"Sorry, I encountered an error: {str(e)}"

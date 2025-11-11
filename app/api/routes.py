@@ -1,6 +1,4 @@
-"""
-API Routes - REST Endpoints
-"""
+# API Routes - REST Endpoints
 from flask import Blueprint, jsonify, request
 from app.database.connection import Database
 from app.services.article_service import ArticleService
@@ -12,20 +10,20 @@ article_service_instance = None
 
 
 def init_routes(db: Database):
-    """Initialize routes with database instance"""
+    # Initialize routes with database instance
     global article_service_instance
     article_service_instance = ArticleService(db)
 
 
 @api_bp.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
+    # Health check endpoint
     return jsonify({'status': 'healthy', 'message': 'HackerNews API is running'})
 
 
 @api_bp.route('/articles/fetch/top', methods=['POST'])
 def fetch_top():
-    """Fetch and store top articles"""
+    # Fetch and store top articles
     limit = request.json.get('limit', 10) if request.json else 10
     
     try:
@@ -44,7 +42,7 @@ def fetch_top():
 
 @api_bp.route('/articles/fetch/trending', methods=['POST'])
 def fetch_trending():
-    """Fetch and store trending articles"""
+    # Fetch and store trending articles
     limit = request.json.get('limit', 10) if request.json else 10
     
     try:
@@ -63,7 +61,7 @@ def fetch_trending():
 
 @api_bp.route('/articles/fetch/new', methods=['POST'])
 def fetch_new():
-    """Fetch and store new articles"""
+    # Fetch and store new articles
     limit = request.json.get('limit', 10) if request.json else 10
     
     try:
@@ -82,7 +80,7 @@ def fetch_new():
 
 @api_bp.route('/articles', methods=['GET'])
 def get_articles():
-    """Get articles with filtering, searching, and sorting"""
+    # Get articles with filtering, searching, and sorting
     try:
         # Parse query parameters
         page = int(request.args.get('page', 1))
@@ -119,7 +117,7 @@ def get_articles():
 
 @api_bp.route('/articles/<int:article_id>', methods=['GET'])
 def get_article(article_id):
-    """Get a specific article by ID"""
+    # Get a specific article by ID
     try:
         article = article_service_instance.get_article_by_id(article_id)
         
@@ -137,7 +135,7 @@ def get_article(article_id):
 
 @api_bp.route('/articles/trending', methods=['GET'])
 def get_trending():
-    """Get top trending articles from database"""
+    # Get top trending articles from database
     try:
         limit = int(request.args.get('limit', 10))
         
@@ -155,7 +153,7 @@ def get_trending():
 
 @api_bp.route('/articles/stats', methods=['GET'])
 def get_stats():
-    """Get statistics about articles"""
+    # Get statistics about articles
     try:
         stats = article_service_instance.get_stats()
         

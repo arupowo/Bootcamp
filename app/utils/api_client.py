@@ -1,6 +1,4 @@
-"""
-API Client - Functions to call the Flask API endpoints
-"""
+# API Client - Functions to call the Flask API endpoints
 import requests
 from typing import Dict, List, Optional
 import os
@@ -10,12 +8,12 @@ load_dotenv()
 
 
 def get_api_base_url() -> str:
-    """Get API base URL from environment or default"""
+    # Get API base URL from environment or default
     return os.getenv('API_BASE_URL', 'http://localhost:5000/api')
 
 
 def fetch_top_articles(limit: int = 10) -> Dict:
-    """Fetch top articles from HackerNews and store in database"""
+    # Fetch top articles from HackerNews and store in database
     response = requests.post(
         f"{get_api_base_url()}/articles/fetch/top",
         json={"limit": limit},
@@ -25,7 +23,7 @@ def fetch_top_articles(limit: int = 10) -> Dict:
 
 
 def fetch_trending_articles(limit: int = 10) -> Dict:
-    """Fetch trending articles from HackerNews and store in database"""
+    # Fetch trending articles from HackerNews and store in database
     response = requests.post(
         f"{get_api_base_url()}/articles/fetch/trending",
         json={"limit": limit},
@@ -35,7 +33,7 @@ def fetch_trending_articles(limit: int = 10) -> Dict:
 
 
 def fetch_new_articles(limit: int = 10) -> Dict:
-    """Fetch new articles from HackerNews and store in database"""
+    # Fetch new articles from HackerNews and store in database
     response = requests.post(
         f"{get_api_base_url()}/articles/fetch/new",
         json={"limit": limit},
@@ -55,7 +53,7 @@ def get_articles(
     sort_by: str = 'score',
     order: str = 'desc'
 ) -> Dict:
-    """Get articles from database with filters"""
+    # Get articles from database with filters
     params = {
         'page': page,
         'per_page': per_page,
@@ -79,13 +77,13 @@ def get_articles(
 
 
 def get_article_by_id(article_id: int) -> Dict:
-    """Get a specific article by database ID"""
+    # Get a specific article by database ID
     response = requests.get(f"{get_api_base_url()}/articles/{article_id}")
     return response.json()
 
 
 def get_trending_articles(limit: int = 10) -> Dict:
-    """Get trending articles from database"""
+    # Get trending articles from database
     response = requests.get(
         f"{get_api_base_url()}/articles/trending",
         params={'limit': limit}
@@ -94,7 +92,7 @@ def get_trending_articles(limit: int = 10) -> Dict:
 
 
 def get_stats() -> Dict:
-    """Get statistics about articles"""
+    # Get statistics about articles
     response = requests.get(f"{get_api_base_url()}/articles/stats")
     return response.json()
 
