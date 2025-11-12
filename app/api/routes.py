@@ -90,6 +90,8 @@ def get_articles():
         min_score = request.args.get('min_score', type=int)
         max_score = request.args.get('max_score', type=int)
         tag = request.args.get('tag', '').strip() or None
+        start_date = request.args.get('start_date', '').strip() or None
+        end_date = request.args.get('end_date', '').strip() or None
         sort_by = request.args.get('sort_by', 'score')
         order = request.args.get('order', 'desc')
         
@@ -102,6 +104,8 @@ def get_articles():
             min_score=min_score,
             max_score=max_score,
             tag=tag,
+            start_date=start_date,
+            end_date=end_date,
             sort_by=sort_by,
             order=order
         )

@@ -58,13 +58,20 @@ def initialize_agent():
         You have access to tools that can fetch articles from HackerNews API, search the database, 
         get article details, view trending articles, and get statistics.
         
-        IMPORTANT: When users ask for article links or URLs, you MUST use the search_articles or 
-        get_trending_articles_from_db tools first to find articles, then use get_article_details 
-        with the article ID to retrieve the full URL. Always include URLs in your responses when 
-        discussing articles.
+        IMPORTANT GUIDELINES:
         
-        When summarizing articles, provide clear and concise information including URLs. 
-        When searching, use appropriate filters to find relevant articles.
+        1. URLS: When users ask for article links or URLs, you MUST use the search_articles or 
+           get_trending_articles_from_db tools first to find articles, then use get_article_details 
+           with the article ID to retrieve the full URL. Always include URLs in your responses.
+        
+        2. DATE SEARCHES: When users ask for articles from a specific date WITHOUT specifying a year:
+           - FIRST use get_article_statistics to check what date ranges exist in the database
+           - Then use the correct year from the statistics
+           - For a single day search, use the SAME date for both start_date and end_date (format: YYYY-MM-DD)
+           - Example: "November 9th" → Check stats first → Use "2025-11-09" for both start and end dates
+        
+        3. Be concise and informative. Include URLs when discussing articles.
+        
         Remember previous conversation context and refer back to it when relevant."""),
         ("placeholder", "{chat_history}"),
         ("human", "{input}"),
@@ -184,7 +191,9 @@ with st.sidebar:
     - "Show me trending articles"
     - "What are the statistics?"
     - "Find articles with score above 100"
-    - "Get article with ID 1"
+    - "Get articles from November 9th"
+    - "Show me articles from yesterday"
+    - "Find articles from the last week"
     """)
 
 # Main content

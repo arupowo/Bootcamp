@@ -14,7 +14,7 @@ from app.utils.api_client import (
 
 @tool
 def fetch_top_hn_articles(limit: int = 10) -> str:
-    # Fetch top articles from HackerNews API and store them in the database. Args: limit: Number of articles to fetch (default: 10). Returns: A string describing how many articles were saved and updated
+    """Fetch top articles from HackerNews API and store them in the database."""
     try:
         result = fetch_top_articles(limit)
         if result.get('success'):
@@ -27,7 +27,7 @@ def fetch_top_hn_articles(limit: int = 10) -> str:
 
 @tool
 def fetch_trending_hn_articles(limit: int = 10) -> str:
-    # Fetch trending articles from HackerNews API and store them in the database. Args: limit: Number of articles to fetch (default: 10). Returns: A string describing how many articles were saved and updated
+    """Fetch trending articles from HackerNews API and store them in the database."""
     try:
         result = fetch_trending_articles(limit)
         if result.get('success'):
@@ -40,7 +40,7 @@ def fetch_trending_hn_articles(limit: int = 10) -> str:
 
 @tool
 def fetch_new_hn_articles(limit: int = 10) -> str:
-    # Fetch new articles from HackerNews API and store them in the database. Args: limit: Number of articles to fetch (default: 10). Returns: A string describing how many articles were saved and updated
+    """Fetch new articles from HackerNews API and store them in the database."""
     try:
         result = fetch_new_articles(limit)
         if result.get('success'):
@@ -58,11 +58,15 @@ def search_articles(
     min_score: Optional[int] = None,
     max_score: Optional[int] = None,
     tag: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     sort_by: str = 'score',
     order: str = 'desc',
     limit: int = 10
 ) -> str:
-    # Search and retrieve articles from the database with various filters. Args: keyword, author, min_score, max_score, tag, sort_by, order, limit. Returns: A formatted string with article summaries
+    """Search and retrieve articles from the database with various filters including date range. 
+    For date searches: Use format YYYY-MM-DD (e.g., '2025-11-09'). To search a specific day, use the same date for both start_date and end_date. 
+    IMPORTANT: When users ask for a specific date without a year, use get_article_statistics tool FIRST to check what years are available in the database."""
     try:
         result = get_articles(
             page=1,
@@ -72,6 +76,8 @@ def search_articles(
             min_score=min_score,
             max_score=max_score,
             tag=tag,
+            start_date=start_date,
+            end_date=end_date,
             sort_by=sort_by,
             order=order
         )
@@ -101,7 +107,7 @@ def search_articles(
 
 @tool
 def get_article_details(article_id: int) -> str:
-    # Get detailed information about a specific article by its database ID. Args: article_id: The database ID of the article. Returns: A formatted string with article details
+    """Get detailed information about a specific article by its database ID."""
     try:
         result = get_article_by_id(article_id)
         if result.get('success') and result.get('data'):
@@ -124,7 +130,7 @@ def get_article_details(article_id: int) -> str:
 
 @tool
 def get_trending_articles_from_db(limit: int = 10) -> str:
-    # Get trending articles from the database, sorted by score. Args: limit: Number of articles to return (default: 10). Returns: A formatted string with trending article summaries
+    """Get trending articles from the database, sorted by score."""
     try:
         result = get_trending_articles(limit)
         if result.get('success') and result.get('data'):
@@ -150,7 +156,7 @@ def get_trending_articles_from_db(limit: int = 10) -> str:
 
 @tool
 def get_article_statistics() -> str:
-    # Get statistics about articles in the database. Returns: A formatted string with database statistics
+    """Get statistics about articles in the database including date range. Use this FIRST when users ask about specific dates to know what date ranges are available."""
     try:
         result = get_stats()
         if result.get('success') and result.get('stats'):
@@ -160,6 +166,15 @@ def get_article_statistics() -> str:
             summary += f"Average Score: {stats.get('average_score', 0):.2f}\n"
             summary += f"Max Score: {stats.get('max_score', 0)}\n"
             summary += f"Total Comments: {stats.get('total_comments', 0)}\n"
+            
+            # Add date range information
+            earliest = stats.get('earliest_article_date')
+            latest = stats.get('latest_article_date')
+            if earliest and latest:
+                summary += f"\n📅 Date Range:\n"
+                summary += f"  Earliest Article: {earliest}\n"
+                summary += f"  Latest Article: {latest}\n"
+            
             return summary
         else:
             return "Unable to retrieve statistics."
@@ -168,7 +183,6 @@ def get_article_statistics() -> str:
 
 
 def get_all_tools():
-    # Return all available tools
     return [
         fetch_top_hn_articles,
         fetch_trending_hn_articles,

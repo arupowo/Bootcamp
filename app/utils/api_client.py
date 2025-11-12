@@ -50,6 +50,8 @@ def get_articles(
     min_score: Optional[int] = None,
     max_score: Optional[int] = None,
     tag: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     sort_by: str = 'score',
     order: str = 'desc'
 ) -> Dict:
@@ -71,6 +73,10 @@ def get_articles(
         params['max_score'] = max_score
     if tag:
         params['tag'] = tag
+    if start_date:
+        params['start_date'] = start_date
+    if end_date:
+        params['end_date'] = end_date
     
     response = requests.get(f"{get_api_base_url()}/articles", params=params)
     return response.json()

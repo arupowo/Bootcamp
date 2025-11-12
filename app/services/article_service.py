@@ -1,6 +1,7 @@
 # Article Service - Business Logic Layer
 from typing import Dict, List, Optional, Tuple
 from sqlalchemy import func
+from datetime import datetime
 import logging
 from app.models.article import Article
 from app.models.article_chunk import ArticleChunk
@@ -20,6 +21,44 @@ logger = logging.getLogger(__name__)
 class ArticleService:    
     def __init__(self, db: Database):
         self.db = db
+    
+    def _parse_date(self, date_str: str, end_of_day: bool = False) -> Optional[datetime]:
+        """
+        Parse various date formats into a datetime object.
+        Supports formats:
+        - 2025-11-10
+        - 2025-11-10 14:18:14
+        - 2025-11-10T14:18:14
+        - 2025-11-10 14:18:14.000
+        - 2025-11-10T14:18:14.000
+        """
+        if not date_str:
+            return None
+        
+        date_formats = [
+            '%Y-%m-%d',                    # 2025-11-10
+            '%Y-%m-%d %H:%M:%S',          # 2025-11-10 14:18:14
+            '%Y-%m-%d %H:%M:%S.%f',       # 2025-11-10 14:18:14.000
+            '%Y-%m-%dT%H:%M:%S',          # 2025-11-10T14:18:14
+            '%Y-%m-%dT%H:%M:%S.%f',       # 2025-11-10T14:18:14.000
+        ]
+        
+        # Try parsing with different formats
+        for fmt in date_formats:
+            try:
+                dt = datetime.strptime(date_str.strip(), fmt)
+                # If end_of_day is True and no time was specified, set to 23:59:59
+                if end_of_day and fmt == '%Y-%m-%d':
+                    dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+                return dt
+            except ValueError:
+                continue
+        
+        # Try ISO format as fallback
+        try:
+            return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        except ValueError:
+            return None
     
     def save_articles_to_db(self, articles: list) -> Tuple[int, int, List[str]]:
         if not articles:
@@ -165,6 +204,8 @@ class ArticleService:
         min_score: Optional[int] = None,
         max_score: Optional[int] = None,
         tag: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         sort_by: str = 'score',
         order: str = 'desc'
     ) -> Dict:
@@ -190,6 +231,25 @@ class ArticleService:
             # Filter by tags
             if tag:
                 query = query.filter(Article.tags.ilike(f'%{tag}%'))
+            
+            # Filter by date range
+            if start_date:
+                try:
+                    # Parse various date formats
+                    start_dt = self._parse_date(start_date)
+                    if start_dt:
+                        query = query.filter(Article.created_at >= start_dt)
+                except ValueError:
+                    pass  # Ignore invalid date format
+            
+            if end_date:
+                try:
+                    # Parse various date formats and set to end of day if no time specified
+                    end_dt = self._parse_date(end_date, end_of_day=True)
+                    if end_dt:
+                        query = query.filter(Article.created_at <= end_dt)
+                except ValueError:
+                    pass  # Ignore invalid date format
             
             # Sorting
             if sort_by == 'created_at':
@@ -252,12 +312,16 @@ class ArticleService:
             avg_score = session.query(func.avg(Article.score)).scalar() or 0
             max_score = session.query(func.max(Article.score)).scalar() or 0
             total_comments = session.query(func.sum(Article.comment_count)).scalar() or 0
+            min_date = session.query(func.min(Article.created_at)).scalar()
+            max_date = session.query(func.max(Article.created_at)).scalar()
             
             return {
                 'total_articles': total_articles,
                 'average_score': round(float(avg_score), 2),
                 'max_score': max_score,
-                'total_comments': total_comments
+                'total_comments': total_comments,
+                'earliest_article_date': min_date.isoformat() if min_date else None,
+                'latest_article_date': max_date.isoformat() if max_date else None
             }
         finally:
             session.close()
